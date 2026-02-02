@@ -21,11 +21,11 @@ router.get('/stats/recent', DashboardController.getRecentActivity); // 10 Jawaba
 // (Create/Update Pasien biasanya via WA Bot, tapi jika mau tambah endpoint bisa di PatientController)
 
 // 3. Manajemen Pertanyaan (CRUD)
-router.get('/questions', QuestionController.index);
-router.post('/questions', QuestionController.store);
-router.get('/questions/:id', QuestionController.show);
-router.put('/questions/:id', QuestionController.update);
-router.delete('/questions/:id', QuestionController.destroy);
+// router.get('/questions', QuestionController.index);
+// router.post('/questions', QuestionController.store);
+// router.get('/questions/:id', QuestionController.show);
+// router.put('/questions/:id', QuestionController.update);
+// router.delete('/questions/:id', QuestionController.destroy);
 
 // 4. Manajemen Admin (CRUD)
 router.post('/register', AuthController.registerAdmin);

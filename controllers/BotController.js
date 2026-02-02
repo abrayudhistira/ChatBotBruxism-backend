@@ -5,15 +5,45 @@ const initModels = require('../models/init-models');
 const { patients: Patients } = initModels(sequelize);
 
 class BotController {
+  
+  // --- HELPER VALIDASI TANGGAL ---
+  isValidDate(dateString) {
+    // 1. Cek Format Dasar (YYYY-MM-DD)
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateString.match(regex)) return { valid: false, msg: "Format tanggal salah. Gunakan YYYY-MM-DD (contoh: 1990-12-31)." };
+
+    // 2. Cek Validitas Kalender (Anti 0000-00-00 atau 2023-02-30)
+    const date = new Date(dateString);
+    const timestamp = date.getTime();
+    if (typeof timestamp !== 'number' || Number.isNaN(timestamp)) {
+      return { valid: false, msg: "Tanggal tidak valid dalam kalender." };
+    }
+
+    // 3. Cek Range Tahun (Logika Umur Manusia)
+    const year = date.getFullYear();
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    // Batasan: Minimal Tahun 1930 (umur ~96 thn) & Maksimal Hari Ini
+    if (year < 1930) {
+      return { valid: false, msg: "Tahun lahir tidak valid (terlalu lampau). Minimal tahun 1930." };
+    }
+    
+    if (date > now) {
+      return { valid: false, msg: "Tanggal lahir tidak boleh di masa depan." };
+    }
+
+    return { valid: true };
+  }
+  // -------------------------------
+
   async handleIncomingMessage(msg, io) {
     // 1. FILTER DASAR
     if (msg.from === 'status@broadcast') return;
     if (msg.from.includes('@g.us')) return;
 
     // 2. VALIDASI TIPE PESAN (Hanya Text)
-    // msg.type bisa: 'chat', 'image', 'video', 'sticker', 'ptt' (voice note)
     if (msg.type !== 'chat') {
-        // Opsional: Reply memberitahu user
         return msg.reply("Mohon maaf, sistem hanya menerima pesan berupa teks.");
     }
 
@@ -27,54 +57,53 @@ class BotController {
       if (!patient.isRegistered) {
         if (body.toUpperCase().startsWith('#DAFTAR#')) {
           const parts = body.split('#');
+          // Expect: ["", "DAFTAR", "Nama", "1990-01-01"]
           if (parts.length < 4) return msg.reply("Format salah. Gunakan: #DAFTAR#Nama#YYYY-MM-DD");
           
           const name = parts[2];
           const birthDate = parts[3];
-          const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-          if (!dateRegex.test(birthDate)) return msg.reply("Format tanggal salah. Gunakan YYYY-MM-DD.");
+
+          // --- VALIDASI TANGGAL KETAT ---
+          const dateCheck = this.isValidDate(birthDate);
+          if (!dateCheck.valid) {
+            return msg.reply(`Gagal: ${dateCheck.msg}`);
+          }
+          // ------------------------------
 
           await PatientService.registerPatient(phone, name, birthDate);
-          return msg.reply(`Halo ${name}, pendaftaran berhasil! Tunggu pertanyaan dari kami.`);
+          return msg.reply(`Halo ${name}, pendaftaran berhasil! Tanggal lahir ${birthDate} tersimpan. Tunggu pertanyaan dari kami.`);
         }
-        return msg.reply("Anda belum terdaftar. Balas: #DAFTAR#Nama#YYYY-MM-DD");
+        return msg.reply("Anda belum terdaftar. Balas: #DAFTAR#Nama#YYYY-MM-DD\nContoh: #DAFTAR#Budi#1990-05-20");
       }
 
       // --- LOGIC 2: JAWAB PERTANYAAN (Context Aware) ---
-      
-      // Cek apakah pasien punya "hutang" jawaban (current_question_id tidak null)
       if (patient.current_question_id) {
           
-          // Simpan jawaban dengan ID pertanyaan yang sesuai
-          // Kita butuh update saveSymptomLog untuk menerima question_id
           await QuestionService.saveSymptomLog(phone, body, patient.current_question_id);
 
-          // Reset status pasien (hapus current_question_id) agar tidak double input
           await Patients.update(
             { current_question_id: null },
             { where: { phone: phone } }
           );
 
-          // Emit ke Dashboard
           io.emit('NEW_SYMPTOM_DATA', {
             phone: phone,
             name: patient.name,
             answer: body,
-            question_id: patient.current_question_id, // Kirim ID pertanyaan ke dashboard juga
+            question_id: patient.current_question_id,
             timestamp: new Date()
           });
 
-          return msg.reply("Terima kasih, jawaban Anda untuk pertanyaan tersebut telah tersimpan.");
+          return msg.reply("Terima kasih, jawaban Anda telah tersimpan.");
       } else {
-          // Jika user chat tapi TIDAK ADA pertanyaan aktif
-          // Opsional: Diam saja, atau beri info
-          // return msg.reply("Saat ini belum ada pertanyaan jadwal untuk Anda. Mohon tunggu jadwal berikutnya.");
+          // User chat tapi tidak ada pertanyaan aktif
           console.log(`[IGNORED] Chat from ${phone} ignored (No active question context).`);
           return; 
       }
 
     } catch (error) {
       console.error("Bot Error:", error);
+      // Opsional: msg.reply("Terjadi kesalahan sistem.")
     }
   }
 }
