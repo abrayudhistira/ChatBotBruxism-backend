@@ -9,61 +9,135 @@ const qrcode = require('qrcode-terminal');
 const sequelize = require('./config/database');
 const patientRoutes = require('./routes/patientRoutes');
 const adminRoutes = require('./routes/adminRoutes');
-const questionsRoutes = require('./routes/questionRoutes');
+const questionRoutes = require('./routes/questionRoutes');
 const BotController = require('./controllers/BotController');
 const initScheduler = require('./jobs/DynamicQuestionJob');
-const AdminService = require("./services/AdminService");
-const questions = require('./models/questions');
+const AdminService = require('./services/AdminService');
 
-// 1. Init Express & Socket.io
+// --- 1. STATE VARIABLES (Untuk menangani Refresh Frontend) ---
+// Variabel ini menyimpan status terakhir agar client baru langsung dapat data
+let currentQR = null;
+let isClientReady = false;
+
+// --- 2. INIT SERVER & SOCKET ---
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
 
-// 2. Middleware
+// Setup Socket.io dengan CORS Longgar
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Izinkan semua IP (localhost, IP LAN, dll)
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+// --- 3. MIDDLEWARE ---
 app.use(cors());
 app.use(express.json());
 
-// 3. Register Routes
+// --- 4. ROUTES ---
 app.use('/api/patients', patientRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/question', questionsRoutes)
+app.use('/api/question', questionRoutes);
 
-// 4. Init WhatsApp Client
+// --- 5. LOGIKA SOCKET CONNECTION (Fix QR Hilang saat Refresh) ---
+io.on('connection', (socket) => {
+  console.log('👤 Client Dashboard terhubung:', socket.id);
+
+  // Cek State: Jika Bot sudah Ready, langsung kasih tahu frontend
+  if (isClientReady) {
+    socket.emit('WA_READY', true);
+  } 
+  // Cek State: Jika belum Ready TAPI ada QR yang tersimpan, kirim QR-nya
+  else if (currentQR) {
+    console.log('📤 Mengirim QR tersimpan ke client baru...');
+    socket.emit('WA_QR', currentQR);
+  }
+});
+
+// --- 6. INIT WHATSAPP CLIENT ---
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: process.env.WA_SESSION_ID }),
-  puppeteer: { headless: true, args: ['--no-sandbox'] }
+  puppeteer: { 
+    headless: true, 
+    args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+  }
 });
 
-// 5. WhatsApp Event Listeners
+// --- 7. WHATSAPP EVENT LISTENERS ---
+
+// Event: QR Code Muncul
 client.on('qr', (qr) => {
-  console.log('SCAN QR CODE INI:');
+  console.log('📸 QR RECEIVED');
+  
+  // Update State
+  currentQR = qr;     
+  isClientReady = false;
+
+  // Tampilkan di terminal & Kirim ke semua socket client
   qrcode.generate(qr, { small: true });
+  io.emit('WA_QR', qr);
 });
 
+// Event: Bot Siap
 client.on('ready', () => {
   console.log('✅ WhatsApp Client Ready!');
-  // Jalankan Scheduler setelah WA connect
+  
+  // Update State
+  isClientReady = true; 
+  currentQR = null; // Hapus QR karena sudah tidak dibutuhkan
+
+  io.emit('WA_READY', true);
+  
+  // Jalankan Scheduler Broadcast
   initScheduler(client);
 });
 
-// Delegate message logic ke BotController
+// Event: Autentikasi Sukses
+client.on('authenticated', () => {
+    console.log('🔐 WhatsApp Authenticated');
+    io.emit('WA_AUTH', "Autentikasi Berhasil, memuat...");
+});
+
+// Event: Gagal Auth
+client.on('auth_failure', msg => {
+    console.error('❌ Auth Failure', msg);
+    io.emit('WA_AUTH_FAIL', "Gagal Login WA");
+});
+
+// Event: Disconnected (Logout/HP Mati)
+client.on('disconnected', (reason) => {
+    console.log('⚠️ Client Disconnected:', reason);
+    
+    // Reset State
+    isClientReady = false;
+    currentQR = null;
+    
+    io.emit('WA_DISCONNECTED', "Bot Terputus");
+});
+
+// Event: Pesan Masuk
 client.on('message', (msg) => {
   BotController.handleIncomingMessage(msg, io);
 });
 
-// 6. Start Server (Pastikan DB Connect dulu)
+// --- 8. START SERVER ---
+const PORT = process.env.PORT || 3001;
+
 sequelize.authenticate()
-  .then(async () => { // Tambah async
+  .then(async () => {
     console.log('✅ Database Connected.');
     
-    // --- SEEDING MASTER ADMIN ---
+    // Seeding Admin jika belum ada
     await AdminService.seedMasterAdmin();
-    // ---------------------------
 
-    const PORT = process.env.PORT || 3001;
+    // Jalankan Server HTTP (yang membungkus Express & Socket.io)
     server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🚀 Server & Socket.io running on port ${PORT}`);
+      console.log(`📡 Socket.io siap menerima koneksi.`);
+      
+      // Nyalakan Bot WA
       client.initialize();
     });
   })
