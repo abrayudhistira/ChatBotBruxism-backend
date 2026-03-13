@@ -56,12 +56,17 @@ io.on('connection', (socket) => {
   }
 });
 
-// --- 6. INIT WHATSAPP CLIENT ---
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: process.env.WA_SESSION_ID }),
   puppeteer: { 
     headless: true, 
-    args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+    args: [
+      '--no-sandbox', 
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage', // Menghindari crash karena keterbatasan memori shared
+      '--disable-gpu',           // Server tidak butuh akselerasi grafis
+      '--no-zygote'              // Mengurangi penggunaan resource proses
+    ] 
   }
 });
 
