@@ -14,8 +14,7 @@ const BotController = require('./controllers/BotController');
 const initScheduler = require('./jobs/DynamicQuestionJob');
 const AdminService = require('./services/AdminService');
 
-// --- 1. STATE VARIABLES (Untuk menangani Refresh Frontend) ---
-// Variabel ini menyimpan status terakhir agar client baru langsung dapat data
+// --- 1. STATE VARIABLES ---
 let currentQR = null;
 let isClientReady = false;
 
@@ -23,10 +22,9 @@ let isClientReady = false;
 const app = express();
 const server = http.createServer(app);
 
-// Setup Socket.io dengan CORS Longgar
 const io = new Server(server, {
   cors: {
-    origin: "*", // Izinkan semua IP (localhost, IP LAN, dll)
+    origin: "*", 
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -41,85 +39,91 @@ app.use('/api/patients', patientRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/question', questionRoutes);
 
-// --- 5. LOGIKA SOCKET CONNECTION (Fix QR Hilang saat Refresh) ---
+// --- 5. LOGIKA SOCKET CONNECTION ---
 io.on('connection', (socket) => {
-  console.log('👤 Client Dashboard terhubung:', socket.id);
+  console.log(`👤 [SOCKET] Client Terhubung: ${socket.id}`);
 
-  // Cek State: Jika Bot sudah Ready, langsung kasih tahu frontend
   if (isClientReady) {
     socket.emit('WA_READY', true);
-  } 
-  // Cek State: Jika belum Ready TAPI ada QR yang tersimpan, kirim QR-nya
-  else if (currentQR) {
-    console.log('📤 Mengirim QR tersimpan ke client baru...');
+  } else if (currentQR) {
+    console.log('📤 [SOCKET] Mengirim QR tersimpan ke client baru...');
     socket.emit('WA_QR', currentQR);
   }
+
+  socket.on('disconnect', () => {
+    console.log(`🔌 [SOCKET] Client Terputus: ${socket.id}`);
+  });
 });
 
+// --- 6. INIT WHATSAPP CLIENT (OPTIMIZED FOR RAILWAY) ---
 const client = new Client({
-  authStrategy: new LocalAuth({ clientId: process.env.WA_SESSION_ID }),
+  authStrategy: new LocalAuth({ clientId: process.env.WA_SESSION_ID || 'icoass-session' }),
   puppeteer: { 
     headless: true, 
     args: [
       '--no-sandbox', 
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage', // Menghindari crash karena keterbatasan memori shared
-      '--disable-gpu',           // Server tidak butuh akselerasi grafis
-      '--no-zygote'              // Mengurangi penggunaan resource proses
-    ] 
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-zygote',
+      // Masalah "Cant link" biasanya karena User-Agent bot terdeteksi
+      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    ],
   }
 });
 
-// --- 7. WHATSAPP EVENT LISTENERS ---
+// --- 7. WHATSAPP EVENT LISTENERS (DETAILED LOGGING) ---
+
+// Monitoring proses loading
+client.on('loading_screen', (percent, message) => {
+    console.log(`⏳ [WA-LOAD] ${percent}%: ${message}`);
+    io.emit('WA_LOG', `Loading: ${percent}% - ${message}`);
+});
 
 // Event: QR Code Muncul
 client.on('qr', (qr) => {
-  console.log('📸 QR RECEIVED');
-  
-  // Update State
+  console.log('📸 [WA-QR] QR Received! Silakan scan.');
   currentQR = qr;     
   isClientReady = false;
 
-  // Tampilkan di terminal & Kirim ke semua socket client
   qrcode.generate(qr, { small: true });
   io.emit('WA_QR', qr);
 });
 
 // Event: Bot Siap
 client.on('ready', () => {
-  console.log('✅ WhatsApp Client Ready!');
-  
-  // Update State
+  console.log('✅ [WA-READY] WhatsApp Client is Ready!');
   isClientReady = true; 
-  currentQR = null; // Hapus QR karena sudah tidak dibutuhkan
+  currentQR = null;
 
   io.emit('WA_READY', true);
-  
-  // Jalankan Scheduler Broadcast
   initScheduler(client);
 });
 
 // Event: Autentikasi Sukses
 client.on('authenticated', () => {
-    console.log('🔐 WhatsApp Authenticated');
+    console.log('🔐 [WA-AUTH] Autentikasi Berhasil!');
     io.emit('WA_AUTH', "Autentikasi Berhasil, memuat...");
 });
 
-// Event: Gagal Auth
+// Event: Gagal Auth (Kunci diagnosa "Cant Link")
 client.on('auth_failure', msg => {
-    console.error('❌ Auth Failure', msg);
-    io.emit('WA_AUTH_FAIL', "Gagal Login WA");
+    console.error('❌ [WA-ERROR] Auth Failure:', msg);
+    io.emit('WA_AUTH_FAIL', `Gagal Login: ${msg}`);
 });
 
-// Event: Disconnected (Logout/HP Mati)
+// Event: Perubahan State (Untuk tracking jika terputus/conflict)
+client.on('change_state', state => {
+    console.log('🔄 [WA-STATE]:', state);
+    io.emit('WA_LOG', `State Change: ${state}`);
+});
+
+// Event: Disconnected
 client.on('disconnected', (reason) => {
-    console.log('⚠️ Client Disconnected:', reason);
-    
-    // Reset State
+    console.log('⚠️ [WA-DISC] Client Disconnected:', reason);
     isClientReady = false;
     currentQR = null;
-    
-    io.emit('WA_DISCONNECTED', "Bot Terputus");
+    io.emit('WA_DISCONNECTED', reason);
 });
 
 // Event: Pesan Masuk
@@ -128,24 +132,22 @@ client.on('message', (msg) => {
 });
 
 // --- 8. START SERVER ---
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8080; // Railway default port
 
 sequelize.authenticate()
   .then(async () => {
-    console.log('✅ Database Connected.');
-    
-    // Seeding Admin jika belum ada
+    console.log('✅ [DB] Database Connected.');
     await AdminService.seedMasterAdmin();
 
-    // Jalankan Server HTTP (yang membungkus Express & Socket.io)
     server.listen(PORT, () => {
-      console.log(`🚀 Server & Socket.io running on port ${PORT}`);
-      console.log(`📡 Socket.io siap menerima koneksi.`);
+      console.log(`🚀 [SERVER] Running on port ${PORT}`);
+      console.log(`📡 [SOCKET] Socket.io is active.`);
       
-      // Nyalakan Bot WA
+      // Inisialisasi Bot
+      console.log('🤖 [WA] Initializing WhatsApp Client...');
       client.initialize();
     });
   })
   .catch(err => {
-    console.error('❌ Database Connection Error:', err);
+    console.error('❌ [DB-ERROR] Connection Error:', err);
   });
