@@ -126,9 +126,14 @@ client.on('disconnected', (reason) => {
     io.emit('WA_DISCONNECTED', reason);
 });
 
-// Event: Pesan Masuk
+// Cari bagian ini di app.js
 client.on('message', (msg) => {
-  BotController.handleIncomingMessage(msg, io);
+  console.log(`📩 [WA-MSG] Pesan masuk dari ${msg.from}: ${msg.body}`); // Tambahkan log ini
+  try {
+    BotController.handleIncomingMessage(msg, io);
+  } catch (err) {
+    console.error("❌ [BOT-ERROR] Gagal proses pesan:", err);
+  }
 });
 
 // --- 8. START SERVER ---
