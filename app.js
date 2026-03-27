@@ -57,17 +57,31 @@ io.on('connection', (socket) => {
 
 // --- 6. INIT WHATSAPP CLIENT (OPTIMIZED FOR RAILWAY) ---
 const client = new Client({
-  authStrategy: new LocalAuth({ clientId: process.env.WA_SESSION_ID }),
+  authStrategy: new LocalAuth({ 
+    clientId: process.env.WA_SESSION_ID,
+  }),
   qrMaxRetries: 5,
-  authTimeoutMs: 60000, // Tunggu 1 menit untuk auth
+  authTimeoutMs: 60000,
+  
+  // OPTIMASI 1: Gunakan cache versi web remote agar tidak download aset berulang yang berat
+  webVersionCache: {
+    type: 'remote',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+  },
+
   puppeteer: { 
     headless: true, 
+    // OPTIMASI 2: Flags agresif untuk membatasi footprint memori Chrome
     args: [
       '--no-sandbox', 
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
+      '--disable-dev-shm-usage', // Menggunakan /tmp alih-alih shared memory (Vital untuk Railway)
       '--disable-gpu',
       '--no-zygote',
+      '--disable-extensions',           // Mematikan ekstensi untuk hemat RAM
+      '--disable-setuid-sandbox',
+      '--js-flags="--max-old-space-size=512"', // Batasi memori internal JS Chrome
+      '--memory-pressure-thresholds=1',  // Paksa Chrome bersih-bersih RAM lebih sering
       '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     ],
   }
