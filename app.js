@@ -57,7 +57,9 @@ io.on('connection', (socket) => {
 
 // --- 6. INIT WHATSAPP CLIENT (OPTIMIZED FOR RAILWAY) ---
 const client = new Client({
-  authStrategy: new LocalAuth({ clientId: process.env.WA_SESSION_ID || 'icoass-session' }),
+  authStrategy: new LocalAuth({ clientId: process.env.WA_SESSION_ID }),
+  qrMaxRetries: 5,
+  authTimeoutMs: 60000, // Tunggu 1 menit untuk auth
   puppeteer: { 
     headless: true, 
     args: [
@@ -66,7 +68,6 @@ const client = new Client({
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--no-zygote',
-      // Masalah "Cant link" biasanya karena User-Agent bot terdeteksi
       '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     ],
   }
