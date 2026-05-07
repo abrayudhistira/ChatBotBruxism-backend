@@ -25,7 +25,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*", 
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true
   }
 });
@@ -60,7 +61,7 @@ const client = new Client({
   authStrategy: new LocalAuth({ 
     clientId: process.env.WA_SESSION_ID,
   }),
-  qrMaxRetries: 5,
+  qrMaxRetries: 50,
   authTimeoutMs: 60000,
   
   // OPTIMASI 1: Gunakan cache versi web remote agar tidak download aset berulang yang berat
