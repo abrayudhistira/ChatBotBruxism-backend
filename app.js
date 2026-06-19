@@ -35,6 +35,30 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+app.get('/health', async (req, res) => {
+    const healthStatus = {
+        server: 'UP',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        database: 'UNKNOWN',
+        whatsapp: isClientReady ? 'READY' : 'NOT_READY'
+    };
+
+    try {
+        // Cek koneksi Database
+        await sequelize.authenticate();
+        healthStatus.database = 'CONNECTED';
+    } catch (err) {
+        healthStatus.database = 'DISCONNECTED';
+        healthStatus.server = 'DEGRADED'; // Server up tapi DB mati
+    }
+
+    // Tentukan HTTP Status
+    const statusCode = (healthStatus.database === 'CONNECTED') ? 200 : 500;
+    
+    res.status(statusCode).json(healthStatus);
+});
+
 // --- 4. ROUTES ---
 app.use('/api/patients', patientRoutes);
 app.use('/api/admin', adminRoutes);

@@ -9,6 +9,18 @@ class QuestionService {
   /**
    * Mencari pertanyaan yang jadwalnya cocok dengan menit ini
    */
+
+  async sendQuestionWithButtons(client, phone, questionData) {
+    const button = new Buttons(
+      `Pertanyaan: ${questionData.text}\n\nSkala 1-5 (1: Tidak Pernah, 5: Sangat Sering)`,
+      [
+        { body: '1' }, { body: '2' }, { body: '3' }, { body: '4' }, { body: '5' }
+      ],
+      'Pilih Jawaban'
+    );
+    await client.sendMessage(phone + '@c.us', button);
+  }
+
   async getActiveQuestionsByTime(timeString) {
     return await Questions.findAll({
       where: {
@@ -24,8 +36,8 @@ class QuestionService {
   async saveSymptomLog(phone, answer, questionId = null) {
     return await SymptomLogs.create({
       phone_number: phone,
-      answer: answer,
-      question_id: questionId // Pastikan kolom ini ada di database symptomlogs
+      answer: answer.toString(),
+      question_id: questionId
     });
   }
 

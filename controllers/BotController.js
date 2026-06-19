@@ -32,72 +32,121 @@ class BotController {
   }
   // -------------------------------
 
+  // async handleIncomingMessage(msg, io) {
+  //   try {
+  //       // 1. FILTER DASAR
+  //       if (msg.from === 'status@broadcast') return;
+  //       if (msg.from.includes('@g.us')) return;
+
+  //       // 2. VALIDASI TIPE PESAN (Hanya Text)
+  //       if (msg.type !== 'chat') {
+  //           return msg.reply("Mohon maaf, sistem hanya menerima pesan berupa teks.");
+  //       }
+
+  //       // --- PERBAIKAN UTAMA DI SINI ---
+  //       // Jangan pakai msg.from langsung karena bisa berisi @lid
+  //       const contact = await msg.getContact(); 
+  //       const phone = contact.number; // Ini PASTI mengembalikan nomor bersih (contoh: 6289618628226)
+  //       // -------------------------------
+
+  //       const body = msg.body.trim();
+
+  //       const patient = await PatientService.findOrInitPatient(phone);
+
+  //       // --- LOGIC 1: REGISTRASI ---
+  //       if (!patient.isRegistered) {
+  //           if (body.toUpperCase().startsWith('#DAFTAR#')) {
+  //           const parts = body.split('#');
+  //           if (parts.length < 4) return msg.reply("Format salah. Gunakan: #DAFTAR#Nama#YYYY-MM-DD");
+            
+  //           const name = parts[2];
+  //           const birthDate = parts[3];
+
+  //           // --- VALIDASI TANGGAL KETAT ---
+  //           const dateCheck = this.isValidDate(birthDate);
+  //           if (!dateCheck.valid) {
+  //               return msg.reply(`Gagal: ${dateCheck.msg}`);
+  //           }
+
+  //           await PatientService.registerPatient(phone, name, birthDate);
+  //           return msg.reply(`Halo ${name}, pendaftaran berhasil! Tanggal lahir ${birthDate} tersimpan. Tunggu pertanyaan dari kami.`);
+  //           }
+  //           return msg.reply("Anda belum terdaftar. Balas: #DAFTAR#Nama#YYYY-MM-DD\nContoh: #DAFTAR#Budi#1990-05-20");
+  //       }
+
+  //       // --- LOGIC 2: JAWAB PERTANYAAN (Context Aware) ---
+  //       if (patient.current_question_id) {
+            
+  //           await QuestionService.saveSymptomLog(phone, body, patient.current_question_id);
+
+  //           await Patients.update(
+  //               { current_question_id: null },
+  //               { where: { phone: phone } }
+  //           );
+
+  //           io.emit('NEW_SYMPTOM_DATA', {
+  //               phone: phone,
+  //               name: patient.name,
+  //               answer: body,
+  //               question_id: patient.current_question_id,
+  //               timestamp: new Date()
+  //           });
+
+  //           return msg.reply("Terima kasih, jawaban Anda telah tersimpan.");
+  //       } else {
+  //           console.log(`[IGNORED] Chat from ${phone} ignored (No active question context).`);
+  //           return; 
+  //       }
+
+  //   } catch (error) {
+  //     console.error("Bot Error:", error);
+  //   }
+  // }
   async handleIncomingMessage(msg, io) {
     try {
-        // 1. FILTER DASAR
-        if (msg.from === 'status@broadcast') return;
-        if (msg.from.includes('@g.us')) return;
+      if (msg.from === 'status@broadcast' || msg.from.includes('@g.us')) return;
 
-        // 2. VALIDASI TIPE PESAN (Hanya Text)
-        if (msg.type !== 'chat') {
-            return msg.reply("Mohon maaf, sistem hanya menerima pesan berupa teks.");
+      // Izinkan pesan teks dan buttons_response
+      if (msg.type !== 'chat' && msg.type !== 'buttons_response') return;
+
+      const contact = await msg.getContact(); 
+      const phone = contact.number; 
+      // Ambil body teks atau selectedButtonId jika menggunakan tombol
+      const body = (msg.selectedButtonId || msg.body).trim();
+
+      const patient = await PatientService.findOrInitPatient(phone);
+
+      if (!patient.isRegistered) {
+        if (body.toUpperCase().startsWith('#DAFTAR#')) {
+          const parts = body.split('#');
+          if (parts.length < 4) return msg.reply("Format: #DAFTAR#Nama#YYYY-MM-DD");
+          
+          const dateCheck = this.isValidDate(parts[3]);
+          if (!dateCheck.valid) return msg.reply(`Gagal: ${dateCheck.msg}`);
+
+          await PatientService.registerPatient(phone, parts[2], parts[3]);
+          return msg.reply(`Halo ${parts[2]}, pendaftaran berhasil!`);
+        }
+        return msg.reply("Anda belum terdaftar. Balas: #DAFTAR#Nama#YYYY-MM-DD");
+      }
+
+      if (patient.current_question_id) {
+        // --- VALIDASI INPUT 1-5 ---
+        const answer = parseInt(body);
+        if (isNaN(answer) || answer < 1 || answer > 5) {
+            return msg.reply("Jawaban tidak valid. Silakan pilih angka 1 sampai 5.");
         }
 
-        // --- PERBAIKAN UTAMA DI SINI ---
-        // Jangan pakai msg.from langsung karena bisa berisi @lid
-        const contact = await msg.getContact(); 
-        const phone = contact.number; // Ini PASTI mengembalikan nomor bersih (contoh: 6289618628226)
-        // -------------------------------
+        await QuestionService.saveSymptomLog(phone, answer, patient.current_question_id);
+        await Patients.update({ current_question_id: null }, { where: { phone: phone } });
 
-        const body = msg.body.trim();
+        io.emit('NEW_SYMPTOM_DATA', {
+            phone, name: patient.name, answer, 
+            question_id: patient.current_question_id, timestamp: new Date()
+        });
 
-        const patient = await PatientService.findOrInitPatient(phone);
-
-        // --- LOGIC 1: REGISTRASI ---
-        if (!patient.isRegistered) {
-            if (body.toUpperCase().startsWith('#DAFTAR#')) {
-            const parts = body.split('#');
-            if (parts.length < 4) return msg.reply("Format salah. Gunakan: #DAFTAR#Nama#YYYY-MM-DD");
-            
-            const name = parts[2];
-            const birthDate = parts[3];
-
-            // --- VALIDASI TANGGAL KETAT ---
-            const dateCheck = this.isValidDate(birthDate);
-            if (!dateCheck.valid) {
-                return msg.reply(`Gagal: ${dateCheck.msg}`);
-            }
-
-            await PatientService.registerPatient(phone, name, birthDate);
-            return msg.reply(`Halo ${name}, pendaftaran berhasil! Tanggal lahir ${birthDate} tersimpan. Tunggu pertanyaan dari kami.`);
-            }
-            return msg.reply("Anda belum terdaftar. Balas: #DAFTAR#Nama#YYYY-MM-DD\nContoh: #DAFTAR#Budi#1990-05-20");
-        }
-
-        // --- LOGIC 2: JAWAB PERTANYAAN (Context Aware) ---
-        if (patient.current_question_id) {
-            
-            await QuestionService.saveSymptomLog(phone, body, patient.current_question_id);
-
-            await Patients.update(
-                { current_question_id: null },
-                { where: { phone: phone } }
-            );
-
-            io.emit('NEW_SYMPTOM_DATA', {
-                phone: phone,
-                name: patient.name,
-                answer: body,
-                question_id: patient.current_question_id,
-                timestamp: new Date()
-            });
-
-            return msg.reply("Terima kasih, jawaban Anda telah tersimpan.");
-        } else {
-            console.log(`[IGNORED] Chat from ${phone} ignored (No active question context).`);
-            return; 
-        }
-
+        return msg.reply("Terima kasih, jawaban Anda telah tersimpan.");
+      }
     } catch (error) {
       console.error("Bot Error:", error);
     }
