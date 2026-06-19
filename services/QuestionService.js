@@ -10,15 +10,19 @@ class QuestionService {
    * Mencari pertanyaan yang jadwalnya cocok dengan menit ini
    */
 
-  async sendQuestionWithButtons(client, phone, questionData) {
-    const button = new Buttons(
-      `Pertanyaan: ${questionData.text}\n\nSkala 1-5 (1: Tidak Pernah, 5: Sangat Sering)`,
-      [
-        { body: '1' }, { body: '2' }, { body: '3' }, { body: '4' }, { body: '5' }
-      ],
-      'Pilih Jawaban'
-    );
-    await client.sendMessage(phone + '@c.us', button);
+  async sendQuestionWithButtons(sock, jid, questionData) {
+    const message =
+      `-----------------------------------------\n\n` +
+      `${questionData.question_text}\n\n` +
+      `*Silakan balas dengan memilih salah satu angka di bawah ini:*\n` +
+      `🔢 *[1]* Tidak Pernah\n` +
+      `🔢 *[2]* Jarang\n` +
+      `🔢 *[3]* Kadang-kadang\n` +
+      `🔢 *[4]* Sering\n` +
+      `🔢 *[5]* Sangat Sering\n\n` +
+      `_Cukup ketik angkanya saja (Contoh: 3)_`;
+
+    await sock.sendMessage(jid, { text: message });
   }
 
   async getActiveQuestionsByTime(timeString) {
@@ -45,7 +49,7 @@ class QuestionService {
 
   async getAllQuestions() {
     return await Questions.findAll({
-        order: [['scheduled_time', 'ASC']]
+      order: [['scheduled_time', 'ASC']]
     });
   }
 

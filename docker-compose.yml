@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  bruxism-bot-backend:
+    build: .
+    container_name: bbot_backend
+    restart: always
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    volumes:
+      - ./auth_info_baileys:/usr/src/app/auth_info_baileys
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
