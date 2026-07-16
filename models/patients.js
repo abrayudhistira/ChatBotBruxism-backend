@@ -1,7 +1,7 @@
 const Sequelize = require('sequelize');
 module.exports = function(sequelize, DataTypes) {
   return sequelize.define('patients', {
-    phone: {
+    telegram_id: {
       type: DataTypes.STRING(20),
       allowNull: false,
       primaryKey: true
@@ -33,7 +33,7 @@ module.exports = function(sequelize, DataTypes) {
         unique: true,
         using: "BTREE",
         fields: [
-          { name: "phone" },
+          { name: "telegram_id" },
         ]
       },
     ]

@@ -10,8 +10,8 @@ function initModels(sequelize) {
   var questions = _questions(sequelize, DataTypes);
   var symptomlogs = _symptomlogs(sequelize, DataTypes);
 
-  symptomlogs.belongsTo(patients, { as: "phone_number_patient", foreignKey: "phone_number"});
-  patients.hasMany(symptomlogs, { as: "symptomlogs", foreignKey: "phone_number"});
+  symptomlogs.belongsTo(patients, { as: "telegram_id_patient", foreignKey: "telegram_id"});
+  patients.hasMany(symptomlogs, { as: "symptomlogs", foreignKey: "telegram_id"});
   symptomlogs.belongsTo(questions, { as: "question", foreignKey: "question_id"});
   questions.hasMany(symptomlogs, { as: "symptomlogs", foreignKey: "question_id"});
 

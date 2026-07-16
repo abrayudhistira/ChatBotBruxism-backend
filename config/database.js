@@ -8,7 +8,7 @@ const sequelize = new Sequelize(
   {
     host: process.env.DB_HOST.trim(),
     dialect: 'mysql',
-    port: parseInt(process.env.DB_PORT) || 15462,
+    port: parseInt(process.env.DB_PORT) || 14920,
     logging: false,
     timezone: '+07:00',
     dialectOptions: {

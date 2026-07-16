@@ -7,8 +7,17 @@ services:
     restart: always
     ports:
       - "3001:3001"
-    env_file:
-      - .env
+    # Mengganti env_file dengan deklarasi eksplisit
+    environment:
+      - PORT=3001
+      - DB_HOST=bruxism-db-chatbot-bruxism.l.aivencloud.com
+      - DB_PORT=14920
+      - DB_USER=avnadmin
+      - DB_PASS=AVNS_cE7bUYJayOMigFfkP-t
+      - DB_NAME=defaultdb
+      - DB_DIALECT=mysql
+      - JWT_SECRET=chatbot-secret
+      - WA_SESSION_ID=bruxism-session
     volumes:
       - ./auth_info_baileys:/usr/src/app/auth_info_baileys
     logging:

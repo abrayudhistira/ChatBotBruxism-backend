@@ -4,7 +4,6 @@ class PatientController {
   async index(req, res) {
     try {
       const data = await PatientService.getAllPatients();
-      // Format Response JSON Standar
       res.status(200).json({
         success: true,
         data: data
@@ -16,11 +15,11 @@ class PatientController {
 
   async destroy(req, res) {
     try {
-      const { phone } = req.params;
-      await PatientService.deletePatient(phone);
+      const { telegram_id } = req.params;
+      await PatientService.deletePatient(telegram_id);
       res.status(200).json({
         success: true,
-        message: `Pasien ${phone} berhasil dihapus`
+        message: `Pasien ${telegram_id} berhasil dihapus`
       });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });

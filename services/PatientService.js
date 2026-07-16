@@ -1,7 +1,6 @@
 const sequelize = require('../config/database');
 const initModels = require('../models/init-models');
 
-// 1. IMPORT & ALIASING MODEL (Wajib sesuai init-models.js)
 const { 
   patients: Patients, 
   symptomlogs: SymptomLogs, 
@@ -9,58 +8,37 @@ const {
 } = initModels(sequelize);
 
 class PatientService {
-  
-  /**
-   * Mengambil semua data pasien (List utama)
-   */
   async getAllPatients() {
-    return await Patients.findAll({
-      order: [['createdAt', 'DESC']]
-    });
+    return await Patients.findAll({ order: [['createdAt', 'DESC']] });
   }
 
-  /**
-   * Cek status pasien saat chat masuk.
-   * Jika belum ada, buat record baru (isRegistered: false).
-   */
-  async findOrInitPatient(phone) {
-    let patient = await Patients.findByPk(phone);
+  async findOrInitPatient(telegram_id) {
+    let patient = await Patients.findByPk(telegram_id);
     if (!patient) {
-      patient = await Patients.create({ phone, isRegistered: false });
+      patient = await Patients.create({ telegram_id, isRegistered: false });
     }
     return patient;
   }
 
-  /**
-   * Proses pendaftaran resmi via WhatsApp
-   */
-  async registerPatient(phone, name, birthDate) {
+  async findByName(name) {
+    return await Patients.findOne({ where: { name } });
+  }
+
+  async registerPatient(telegram_id, name, birthDate) {
     return await Patients.update(
-      { name: name, birth: birthDate, isRegistered: true },
-      { where: { phone } }
+      { name, birth: birthDate, isRegistered: true },
+      { where: { telegram_id } }
     );
   }
 
-  /**
-   * Hapus pasien
-   */
-  async deletePatient(phone) {
-    return await Patients.destroy({ where: { phone } });
+  async deletePatient(telegram_id) {
+    return await Patients.destroy({ where: { telegram_id } });
   }
 
-  // --- DASHBOARD & ANALYTICS METHODS ---
-
-  /**
-   * Hitung Total Pasien
-   */
   async countPatients() {
     return await Patients.count();
   }
 
-  /**
-   * Ambil 10 Aktivitas/Jawaban Terbaru
-   * Join: Log -> Pasien & Log -> Pertanyaan
-   */
   async getRecentLogs() {
     return await SymptomLogs.findAll({
       limit: 10,
@@ -68,38 +46,32 @@ class PatientService {
       include: [
         {
           model: Patients,
-          as: 'phone_number_patient', // Alias sesuai init-models.js
-          attributes: ['name', 'phone']
+          as: 'telegram_id_patient',
+          attributes: ['name', 'telegram_id']
         },
         {
           model: Questions,
-          as: 'question', // Alias sesuai init-models.js
+          as: 'question',
           attributes: ['question_text']
         }
       ]
     });
   }
 
-  /**
-   * Ambil Detail Pasien + Histori Jawaban Lengkap
-   * Fitur: Nested Join (Pasien -> Log -> Pertanyaan)
-   */
-  async getPatientWithLogs(phone) {
+  async getPatientWithLogs(telegram_id) {
     return await Patients.findOne({
-      where: { phone },
+      where: { telegram_id },
       include: [{
         model: SymptomLogs,
         as: 'symptomlogs',
-        required: false, // Tetap ambil data pasien meskipun belum ada log (jawaban)
-        // NESTED INCLUDE: Ambil detail pertanyaan dari setiap log
+        required: false,
         include: [{
-            model: Questions,
-            as: 'question', 
-            attributes: ['id', 'question_text', 'scheduled_time']
+          model: Questions,
+          as: 'question', 
+          attributes: ['id', 'question_text', 'scheduled_time']
         }]
       }],
       order: [
-        // Urutkan symptomlogs berdasarkan waktu terbaru
         [{ model: SymptomLogs, as: 'symptomlogs' }, 'createdAt', 'DESC']
       ]
     });

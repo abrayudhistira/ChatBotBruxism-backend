@@ -11,12 +11,12 @@ module.exports = function(sequelize, DataTypes) {
       type: DataTypes.TEXT,
       allowNull: false
     },
-    phone_number: {
+    telegram_id: {
       type: DataTypes.STRING(20),
       allowNull: true,
       references: {
         model: 'patients',
-        key: 'phone'
+        key: 'telegram_id'
       }
     },
     question_id: {
@@ -41,10 +41,10 @@ module.exports = function(sequelize, DataTypes) {
         ]
       },
       {
-        name: "phone_number",
+        name: "telegram_id",
         using: "BTREE",
         fields: [
-          { name: "phone_number" },
+          { name: "telegram_id" },
         ]
       },
       {
