@@ -13,9 +13,6 @@ RUN npm ci --only=production
 # Salin seluruh kode sumber aplikasi
 COPY . .
 
-# Buat folder khusus untuk sesi WhatsApp agar tidak terjadi error permission
-RUN mkdir -p auth_info_baileys
-
 # Ekspos port yang digunakan oleh aplikasi (sesuai port di app.js)
 EXPOSE 3001
 

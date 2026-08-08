@@ -7,7 +7,6 @@ services:
     restart: always
     ports:
       - "3001:3001"
-    # Mengganti env_file dengan deklarasi eksplisit
     environment:
       - PORT=3001
       - DB_HOST=bruxism-db-chatbot-bruxism.l.aivencloud.com
@@ -17,9 +16,7 @@ services:
       - DB_NAME=defaultdb
       - DB_DIALECT=mysql
       - JWT_SECRET=chatbot-secret
-      - WA_SESSION_ID=bruxism-session
-    volumes:
-      - ./auth_info_baileys:/usr/src/app/auth_info_baileys
+      - TELEGRAM_BOT_TOKEN=8723295703:AAHkGaLxl0EUyUIk_d11lw-MCo88uD4kGOk
     logging:
       driver: "json-file"
       options:
